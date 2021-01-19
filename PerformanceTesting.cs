@@ -69,6 +69,28 @@ namespace DapperEFCorePostgreSQL
             foreach (var category in categories)
                 category.Products = products.Where(p => p.CategoryId == category.CategoryId).ToList();
         }
+        [Benchmark]
+        public void Dapper_AutoMapper1_NEW()
+        {
+            using (var connection = new NpgsqlConnection(Constants.ConnectionString))
+            {
+                string sql = "SELECT \"Products\".*,\"Categories\".\"CategoryName\" FROM \"Products\" FULL JOIN \"Categories\" ON \"Categories\".\"CategoryId\" = \"Products\".\"CategoryId\"";
+                var productCategoryView = connection.Query<CategoryProductView>(sql);
+                var products = productCategoryView.Where(w => w.ProductId.HasValue).GroupBy(g => g.ProductId).Select(s =>
+                  {
+                      var first = s.First();
+                      return new ProductDto() { Content = first.Content, ProductId = first.ProductId.Value, Description = first.Description, Name = first.Name, CategoryId = first.CategoryId.HasValue ? first.CategoryId.Value : 0, Category = !first.CategoryId.HasValue ? null : new CategoryDto() { CategoryId = first.CategoryId.Value, CategoryName = first.CategoryName } };
+                  });
+
+
+                var categories = productCategoryView.Where(w => w.CategoryId.HasValue).GroupBy(g => g.CategoryId).Select(s =>
+                {
+                    var first = s.First();
+                    return new CategoryDto() { CategoryId = first.CategoryId.Value, CategoryName = first.CategoryName, Products = products.Where(e => e.CategoryId == first.CategoryId.Value).ToList() };
+                });
+            }
+
+        }
 
         [Benchmark]
         public void Dapper_AutoMapper2()
