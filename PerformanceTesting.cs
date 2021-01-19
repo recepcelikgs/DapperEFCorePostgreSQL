@@ -83,7 +83,22 @@ namespace DapperEFCorePostgreSQL
         }
 
         [Benchmark]
-        public void Dapper()
+        public void Dapper_AutoMapper3()
+        {
+            using var connection = new NpgsqlConnection(Constants.ConnectionString);
+            var categories = connection.Query<CategoryDto>("SELECT * FROM \"Categories\"").ToList();
+            var products = connection.Query<ProductDto, CategoryDto, ProductDto>(
+                "SELECT P.\"ProductId\", P.\"CategoryId\", P.\"Name\", P.\"Description\", P.\"Content\", P.\"CreateDate\", C.\"CategoryName\", C.\"CategoryId\", C.\"CreateDate\" FROM \"Categories\" C LEFT JOIN \"Products\" P ON C.\"CategoryId\"=P.\"CategoryId\"",
+                (p, c) => { p.Category = c; return p; },
+                splitOn: "CategoryName").ToList();
+            // Categories.Products?
+            // Products.Category?
+            // foreach (var category in categories)
+            //    category.Products = products.Where(p => p.CategoryId == category.CategoryId).ToList();
+        }
+
+        [Benchmark]
+        public void Dapper1()
         {
             using var connection = new NpgsqlConnection(Constants.ConnectionString);
             var categories = connection.Query("SELECT * FROM \"Categories\"").Select(obj => new CategoryDto
@@ -103,6 +118,28 @@ namespace DapperEFCorePostgreSQL
                     Category = category
                 }).ToList();
             }
+        }
+
+        [Benchmark]
+        public void Dapper2()
+        {
+            using var connection = new NpgsqlConnection(Constants.ConnectionString);
+            var categories = connection.Query("SELECT * FROM \"Categories\"").Select(obj => new CategoryDto
+            {
+                CategoryId = obj.CategoryId,
+                CategoryName = obj.CategoryName
+            }).ToList();
+            var products = connection.Query("SELECT * FROM \"Products\"").Select(obj => new ProductDto
+            {
+                ProductId = obj.ProductId,
+                CategoryId = obj.CategoryId,
+                Name = obj.Name,
+                Description = obj.Description,
+                Content = obj.Content,
+                Category = categories.FirstOrDefault(c => c.CategoryId == obj.CategoryId)
+            }).ToList();
+            foreach (var category in categories)
+                category.Products = products.Where(p => p.CategoryId == category.CategoryId).ToList();
         }
 
     }
